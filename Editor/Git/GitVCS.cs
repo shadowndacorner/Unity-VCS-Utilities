@@ -184,7 +184,14 @@ public class GitVCS : AbstractVCSHelper
                     {
                         if (GUILayout.Button("Unlock"))
                         {
-                            vcs.GitUnlockFile(new string[] { v.Key });
+                            try
+                            {
+                                vcs.GitUnlockFile(new string[] { v.Key });
+                            }
+                            catch(System.Exception ex)
+                            {
+                                // Do nothing, it'll tell them
+                            }
                         }
                     }
                     EditorGUILayout.EndHorizontal();
@@ -198,12 +205,24 @@ public class GitVCS : AbstractVCSHelper
                 ++EditorGUI.indentLevel;
                 foreach (var v in vcs.ModifiedPaths)
                 {
+                    if (!File.Exists(v))
+                        continue;
+
                     EditorGUILayout.BeginHorizontal();
                     GUILayout.Label(v);
-                    if (GUILayout.Button("Select"))
+                    if (GUILayout.Button("Select", GUILayout.ExpandWidth(false)))
                     {
                         Selection.activeObject = AssetDatabase.LoadAssetAtPath<Object>(v);
                     }
+
+                    if (GUILayout.Button("Discard Changes", GUILayout.ExpandWidth(false)))
+                    {
+                        var oldSelection = Selection.activeObject;
+                        Selection.activeObject = AssetDatabase.LoadAssetAtPath<Object>(v);
+                        vcs.DiscardChanges();
+                        Selection.activeObject = oldSelection;
+                    }
+
                     EditorGUILayout.EndHorizontal();
 
                     EditorGUILayout.Space();
