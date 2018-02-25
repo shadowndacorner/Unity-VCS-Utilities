@@ -33,7 +33,7 @@ using System.Text;
 
 public static class GitHelper
 {
-    public static class EditorPrefsKeys
+    public static class VCSPrefsKeys
     {
         public const string UsernamePrefKey = "git-lfs-username";
         public const string SceneAutoLockKey = "git-lfs-autolock-scenes";
@@ -41,9 +41,9 @@ public static class GitHelper
 
         public static void ResetConfig()
         {
-            EditorPrefs.DeleteKey(UsernamePrefKey);
-            EditorPrefs.DeleteKey(PreventEditsOnLockKey);
-            EditorPrefs.DeleteKey(SceneAutoLockKey);
+            VCSPrefs.DeleteKey(UsernamePrefKey);
+            VCSPrefs.DeleteKey(PreventEditsOnLockKey);
+            VCSPrefs.DeleteKey(SceneAutoLockKey);
         }
     }
 
@@ -52,7 +52,7 @@ public static class GitHelper
     {
         get
         {
-            return EditorPrefs.HasKey(EditorPrefsKeys.UsernamePrefKey);
+            return VCSPrefs.HasKey(VCSPrefsKeys.UsernamePrefKey);
         }
     }
 
@@ -60,15 +60,15 @@ public static class GitHelper
     {
         get
         {
-            if (!EditorPrefs.HasKey(EditorPrefsKeys.SceneAutoLockKey))
+            if (!VCSPrefs.HasKey(VCSPrefsKeys.SceneAutoLockKey))
                 SceneAutoLock = true;
 
-            return EditorPrefs.GetBool(EditorPrefsKeys.SceneAutoLockKey);
+            return VCSPrefs.GetBool(VCSPrefsKeys.SceneAutoLockKey);
         }
         set
         {
-            if (EditorPrefs.GetBool(EditorPrefsKeys.SceneAutoLockKey) != value)
-                EditorPrefs.SetBool(EditorPrefsKeys.SceneAutoLockKey, value);
+            if (VCSPrefs.GetBool(VCSPrefsKeys.SceneAutoLockKey) != value)
+                VCSPrefs.SetBool(VCSPrefsKeys.SceneAutoLockKey, value);
         }
     }
 
@@ -76,14 +76,14 @@ public static class GitHelper
     {
         get
         {
-            if (!EditorPrefs.HasKey(EditorPrefsKeys.PreventEditsOnLockKey))
+            if (!VCSPrefs.HasKey(VCSPrefsKeys.PreventEditsOnLockKey))
                 PreventEditsOnRemoteLock = true;
-            return EditorPrefs.GetBool(EditorPrefsKeys.PreventEditsOnLockKey);
+            return VCSPrefs.GetBool(VCSPrefsKeys.PreventEditsOnLockKey);
         }
         set
         {
-            if (EditorPrefs.GetBool(EditorPrefsKeys.PreventEditsOnLockKey) != value)
-                EditorPrefs.SetBool(EditorPrefsKeys.PreventEditsOnLockKey, value);
+            if (VCSPrefs.GetBool(VCSPrefsKeys.PreventEditsOnLockKey) != value)
+                VCSPrefs.SetBool(VCSPrefsKeys.PreventEditsOnLockKey, value);
         }
     }
 
@@ -91,11 +91,11 @@ public static class GitHelper
     {
         get
         {
-            return EditorPrefs.GetString(EditorPrefsKeys.UsernamePrefKey);
+            return VCSPrefs.GetString(VCSPrefsKeys.UsernamePrefKey);
         }
         set
         {
-            EditorPrefs.SetString(EditorPrefsKeys.UsernamePrefKey, value);
+            VCSPrefs.SetString(VCSPrefsKeys.UsernamePrefKey, value);
         }
     }
 
@@ -141,5 +141,31 @@ public static class GitHelper
                 handleOutputLine(result);
         }
         return false;
+    }
+
+    // These string ops are suboptimal, but they should be realtively infrequent so it
+    // doesn't matter too much;
+
+    /// <summary>
+    /// Translates a Unity path into the Git
+    /// </summary>
+    /// <param name="unityPath">The path relative to the Unity project root</param>
+    /// <returns></returns>
+    public static string UnityToGitPath(string unityPath)
+    {
+        return Path.Combine(GitVCS.RelativePathToUnityDirectory, unityPath).Replace('\\', '/');
+    }
+
+    /// <summary>
+    /// Translates a git path into Unity
+    /// </summary>
+    /// <param name="unityPath">The path relative to the git root</param>
+    /// <returns></returns>
+    public static string GitToUnityPath(string gitPath)
+    {
+        var res = gitPath.Replace('\\', '/').Replace(GitVCS.RelativePathToUnityDirectory, "");
+        if (res.StartsWith("/"))
+            res = res.Substring(1);
+        return res;
     }
 }

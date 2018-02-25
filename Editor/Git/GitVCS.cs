@@ -48,10 +48,12 @@ public class GitVCS : AbstractVCSHelper
     // This is mostly to clean up the class
     class GitOnGui
     {
-        GUIContent ConfigDropdown = new GUIContent("Configuration");
-        GUIContent LockedFileDropdown = new GUIContent("Locked Files");
-        public bool configShown;
-        bool lockedFiles;
+        GUIContent ConfigLabel = new GUIContent("Configuration");
+        GUIContent LockedFileLabel = new GUIContent("Locked Files");
+        GUIContent ModifiedFilesLabel = new GUIContent("Modified Files");
+        bool configFoldout;
+        bool lockedFilesFoldout;
+        bool modifiedFilesFoldout;
 
         bool hasCheckedVersion;
         bool versionWorks;
@@ -69,16 +71,16 @@ public class GitVCS : AbstractVCSHelper
 
         public void Draw(GitVCS vcs)
         {
-            if ((configShown = EditorGUILayout.Foldout(configShown, ConfigDropdown)))
+            if ((configFoldout = EditorGUILayout.Foldout(configFoldout, ConfigLabel)))
             {
                 ++EditorGUI.indentLevel;
                 // Username
                 {
-                    string value = EditorPrefs.HasKey(GitHelper.EditorPrefsKeys.UsernamePrefKey) ? EditorPrefs.GetString(GitHelper.EditorPrefsKeys.UsernamePrefKey) : "";
+                    string value = VCSPrefs.HasKey(GitHelper.VCSPrefsKeys.UsernamePrefKey) ? VCSPrefs.GetString(GitHelper.VCSPrefsKeys.UsernamePrefKey) : "";
                     string newvalue = EditorGUILayout.TextField("Github Username", value);
                     if (newvalue != value)
                     {
-                        EditorPrefs.SetString(GitHelper.EditorPrefsKeys.UsernamePrefKey, newvalue);
+                        VCSPrefs.SetString(GitHelper.VCSPrefsKeys.UsernamePrefKey, newvalue);
                     }
                 }
 
@@ -165,7 +167,7 @@ public class GitVCS : AbstractVCSHelper
                 --EditorGUI.indentLevel;
             }
 
-            if ((lockedFiles = EditorGUILayout.Foldout(lockedFiles, LockedFileDropdown)))
+            if ((lockedFilesFoldout = EditorGUILayout.Foldout(lockedFilesFoldout, LockedFileLabel)))
             {
                 ++EditorGUI.indentLevel;
                 foreach (var v in vcs.LockedFiles)
@@ -191,6 +193,24 @@ public class GitVCS : AbstractVCSHelper
                 --EditorGUI.indentLevel;
             }
 
+            if ((modifiedFilesFoldout = EditorGUILayout.Foldout(modifiedFilesFoldout, ModifiedFilesLabel)))
+            {
+                ++EditorGUI.indentLevel;
+                foreach (var v in vcs.ModifiedPaths)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    GUILayout.Label(v);
+                    if (GUILayout.Button("Select"))
+                    {
+                        Selection.activeObject = AssetDatabase.LoadAssetAtPath<Object>(v);
+                    }
+                    EditorGUILayout.EndHorizontal();
+
+                    EditorGUILayout.Space();
+                }
+                --EditorGUI.indentLevel;
+            }
+
             if (GUILayout.Button("Refresh Locks"))
             {
                 vcs.RefreshGitLockTypes();
@@ -199,7 +219,7 @@ public class GitVCS : AbstractVCSHelper
 
             if (GUILayout.Button("Reset Configuration"))
             {
-                GitHelper.EditorPrefsKeys.ResetConfig();
+                GitHelper.VCSPrefsKeys.ResetConfig();
             }
         }
     }
@@ -223,7 +243,7 @@ public class GitVCS : AbstractVCSHelper
         {
             if (_lockedFiles == null)
             {
-                LoadLockedFilesFromEditorPrefs();
+                LoadLockedFilesFromVCSPrefs();
             }
             return _lockedFiles;
         }
@@ -239,15 +259,15 @@ public class GitVCS : AbstractVCSHelper
             list.Add(v.Value);
         }
         storage.Locks = list;
-        EditorPrefs.SetString(LockedFileKey, JsonUtility.ToJson(storage));
+        VCSPrefs.SetString(LockedFileKey, JsonUtility.ToJson(storage));
     }
 
-    void LoadLockedFilesFromEditorPrefs(bool forceRebuild=false)
+    void LoadLockedFilesFromVCSPrefs(bool forceRebuild=false)
     {
         _lockedFiles = new Dictionary<string, LockedFile>();
-        if (EditorPrefs.HasKey(LockedFileKey))
+        if (VCSPrefs.HasKey(LockedFileKey))
         {
-            var storage = JsonUtility.FromJson<LockFileStorage>(EditorPrefs.GetString(LockedFileKey));
+            var storage = JsonUtility.FromJson<LockFileStorage>(VCSPrefs.GetString(LockedFileKey));
             
             // If this is a different run, let's refresh git locks
             if ((storage.PID != Process.GetCurrentProcess().Id) || forceRebuild)
@@ -278,7 +298,13 @@ public class GitVCS : AbstractVCSHelper
         get;
         internal set;
     }
-    
+
+    public static string RelativePathToUnityDirectory
+    {
+        get;
+        internal set;
+    }
+
     static bool FindGitRoot()
     {
         if (GitRoot != null)
@@ -297,7 +323,7 @@ public class GitVCS : AbstractVCSHelper
 
             result =>
             {
-                GitRoot = result;
+                GitRoot = result.Replace('\\', '/');
                 found = true;
             },
 
@@ -311,6 +337,14 @@ public class GitVCS : AbstractVCSHelper
                 return false;
             }
         );
+
+        if (found)
+        {
+            RelativePathToUnityDirectory = System.Environment.CurrentDirectory.Replace('\\', '/').Replace(GitRoot, "");
+            if (RelativePathToUnityDirectory.StartsWith("/"))
+                RelativePathToUnityDirectory = RelativePathToUnityDirectory.Substring(1);
+        }
+
         return found;
     }
 
@@ -335,6 +369,8 @@ public class GitVCS : AbstractVCSHelper
                         continue;
                     }
 
+                    UpdateModifiedFilesAsync();
+
                     // Update locks
                     var newLockFiles = new Dictionary<string, LockedFile>();
                     GitHelper.RunGitCommand("lfs locks",
@@ -352,7 +388,7 @@ public class GitVCS : AbstractVCSHelper
                             try
                             {
                                 var parts = result.Split('\t');
-                                var path = parts[0];
+                                var path = GitHelper.GitToUnityPath(parts[0]);
                                 var user = parts[1];
 
                                 var locked = new LockedFile();
@@ -373,28 +409,24 @@ public class GitVCS : AbstractVCSHelper
                         }
                     );
 
-                    var changes = GenerateRecursiveModifiedList();
-
                     lock (_actionQueueLock)
                     {
                         var cnt = LockedFiles.Count;
-                        int hash = 0;
+                        string hashStr = "";
                         foreach (var v in LockedFiles)
-                            hash += v.Key.GetHashCode() ^ v.Value.User.GetHashCode();
+                            hashStr += v.Key + ": " + v.Value.User.GetHashCode();
 
-
-                        int modPathHash = 0;
-                        foreach (var v in ModifiedPaths)
-                            modPathHash += v.GetHashCode();
-
+                        int hash = hashStr.GetHashCode();
                         _toRunOnMainThread.Enqueue(() =>
                         {
                             // Locked files
                             if (cnt == LockedFiles.Count)
                             {
-                                int newhash = 0;
+                                var newHashStr = "";
                                 foreach (var v in LockedFiles)
-                                    newhash += v.Key.GetHashCode() ^ v.Value.User.GetHashCode();
+                                    newHashStr += v.Key + ": " + v.Value.User.GetHashCode();
+
+                                int newhash = newHashStr.GetHashCode();
 
                                 // Let's make sure that the super lazy hashes match
                                 if (newhash == hash)
@@ -422,21 +454,6 @@ public class GitVCS : AbstractVCSHelper
                                     }
                                 }
                             }
-
-                            // Ensure that paths diffs haven't been modified externally
-                            int nmodPathHash = 0;
-                            foreach (var v in ModifiedPaths)
-                                nmodPathHash += v.GetHashCode();
-
-                            if (nmodPathHash == modPathHash)
-                            {
-                                ModifiedPaths.Clear();
-                                foreach (var v in changes)
-                                {
-                                    ModifiedPaths.Add(v);
-                                }
-                            }
-
                             UpdateLockedFiles();
                         });
                     }
@@ -520,7 +537,7 @@ public class GitVCS : AbstractVCSHelper
         }
         else
         {
-            LoadLockedFilesFromEditorPrefs();
+            LoadLockedFilesFromVCSPrefs();
             RefreshGitLockTypes();
         }
     }
@@ -593,9 +610,14 @@ public class GitVCS : AbstractVCSHelper
             },
             result =>
             {
-                if (File.Exists(result))
+                var unityPath = GitHelper.GitToUnityPath(result);
+                if (File.Exists(unityPath) || Directory.Exists(unityPath))
                 {
-                    changed.Add(result.Replace('\\', '/'));
+                    changed.Add(unityPath);
+                }
+                else
+                {
+                    Debug.LogError("Ignoring file modifications @ " + result);
                 }
             },
             error =>
@@ -627,7 +649,7 @@ public class GitVCS : AbstractVCSHelper
             {
                 if (File.Exists(result))
                 {
-                    tracked.Add(result.Replace('\\', '/'));
+                    tracked.Add(GitHelper.GitToUnityPath(result));
                 }
             },
             error =>
@@ -734,7 +756,7 @@ public class GitVCS : AbstractVCSHelper
     public override void RefreshLockedFiles()
     {
         RefreshGitLockTypes();
-        LoadLockedFilesFromEditorPrefs(true);
+        LoadLockedFilesFromVCSPrefs(true);
     }
 
     GitOnGui _inst;
@@ -766,6 +788,11 @@ public class GitVCS : AbstractVCSHelper
         UpdateModifiedFilesAsync();
     }
 
+    /// <summary>
+    /// Locks a set of files in git.
+    /// </summary>
+    /// <param name="paths"></param>
+    /// <returns></returns>
     public bool GitLockFile(string[] paths)
     {
         var cmdstring = new StringBuilder();
@@ -831,7 +858,7 @@ public class GitVCS : AbstractVCSHelper
                     foreach (var path in paths)
                     {
                         var locked = new LockedFile();
-                        locked.Path = path;
+                        locked.Path = GitHelper.GitToUnityPath(path);
                         locked.User = GitHelper.Username;
                         LockedFiles.Add(path.Trim(), locked);
                     }
@@ -1015,7 +1042,8 @@ public class GitVCS : AbstractVCSHelper
             result =>
             {
                 var parts = result.Split('\t');
-                var path = parts[0];
+                var path = GitHelper.GitToUnityPath(parts[0]);
+                Debug.Log("Locking path " + path + "(from "+parts[0]+")");
                 var user = parts[1];
 
                 var locked = new LockedFile();
@@ -1097,7 +1125,7 @@ public class GitVCS : AbstractVCSHelper
             {
                 if (File.Exists(result))
                 {
-                    changes.Add(result);
+                    changes.Add(GitHelper.GitToUnityPath(result));
                 }
             }
         );
