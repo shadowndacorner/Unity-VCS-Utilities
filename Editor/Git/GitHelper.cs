@@ -153,6 +153,9 @@ public static class GitHelper
     /// <returns></returns>
     public static string UnityToGitPath(string unityPath)
     {
+        if (GitVCS.GitRootIsUnityRoot)
+            return unityPath;
+
         return Path.Combine(GitVCS.RelativePathToUnityDirectory, unityPath).Replace('\\', '/');
     }
 
@@ -163,6 +166,9 @@ public static class GitHelper
     /// <returns></returns>
     public static string GitToUnityPath(string gitPath)
     {
+        if (GitVCS.GitRootIsUnityRoot)
+                return gitPath;
+
         var res = gitPath.Replace('\\', '/').Replace(GitVCS.RelativePathToUnityDirectory, "");
         if (res.StartsWith("/"))
             res = res.Substring(1);

@@ -305,6 +305,12 @@ public class GitVCS : AbstractVCSHelper
         internal set;
     }
 
+    public static bool GitRootIsUnityRoot
+    {
+        get;
+        internal set;
+    }
+
     static bool FindGitRoot()
     {
         if (GitRoot != null)
@@ -343,6 +349,7 @@ public class GitVCS : AbstractVCSHelper
             RelativePathToUnityDirectory = System.Environment.CurrentDirectory.Replace('\\', '/').Replace(GitRoot, "");
             if (RelativePathToUnityDirectory.StartsWith("/"))
                 RelativePathToUnityDirectory = RelativePathToUnityDirectory.Substring(1);
+            GitRootIsUnityRoot = string.IsNullOrEmpty(RelativePathToUnityDirectory) || RelativePathToUnityDirectory == "/" || RelativePathToUnityDirectory == "." || RelativePathToUnityDirectory == "./";
         }
 
         return found;
