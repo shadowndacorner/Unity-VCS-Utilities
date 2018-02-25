@@ -467,6 +467,9 @@ public class GitVCS : AbstractVCSHelper
         {
             if (GitHelper.SceneAutoLock)
             {
+                if (string.IsNullOrEmpty(scn.path))
+                    return;
+
                 if (!IsFileLockedByLocalUser(scn.path))
                 {
                     GitLockFile(new string[] { scn.path });
@@ -613,7 +616,7 @@ public class GitVCS : AbstractVCSHelper
         List<string> tracked = new List<string>();
 
         // TODO: Handle when git directory is not the project root
-        GitHelper.RunGitCommand("ls-tree -r "+GetCurrentBranch()+" --name-only",
+        GitHelper.RunGitCommand("ls-tree -r " + GetCurrentBranch() + " --name-only",
             proc =>
             {
                 if (!proc.WaitForExit(5000))
@@ -644,7 +647,7 @@ public class GitVCS : AbstractVCSHelper
     {
         var guids = Selection.assetGUIDs;
         var paths = new List<string>(guids.Length);
-        var changed = new HashSet<string>(GetChangedFiles());
+        var changed = new HashSet<string>(GenerateRecursiveModifiedList());
         foreach (var v in guids)
         {
             var path = AssetDatabase.GUIDToAssetPath(v).Replace('\\', '/');
@@ -684,7 +687,7 @@ public class GitVCS : AbstractVCSHelper
             {
                 arguments.Append('"' + v + "\" ");
             }
-            GitRevertFile(arguments.ToString());
+            GitRevertFile(paths.ToArray());
             AssetDatabase.Refresh();
         }
     }
@@ -922,9 +925,39 @@ public class GitVCS : AbstractVCSHelper
         return !hasError;
     }
 
-    public void GitRevertFile(string path)
+    public void GitRevertFile(string[] paths)
     {
-        GitHelper.RunGitCommand("checkout -- " + path,
+        // Yes this generates a lot of garbage but it's fine
+        var rPath = new List<string>();
+        var tracked = new HashSet<string>(GetChangedFiles());
+
+        foreach(var v in paths)
+        {
+            if (tracked.Contains(v))
+            {
+                rPath.Add(v);
+            }
+            else
+            {
+                if (File.Exists(v))
+                {
+                    File.Delete(v);
+                }
+            }
+        }
+
+        if (rPath.Count == 0)
+        {
+            //Debug.Log("[VCS Discard] No git reverts necessary");
+            return;
+        }
+        var cmdstring = new StringBuilder();
+        foreach (var path in rPath)
+        {
+            cmdstring.Append('"' + path + '"' );
+        }
+
+        GitHelper.RunGitCommand("checkout -- " + cmdstring.ToString(),
             (proc) =>
             {
                 if (!proc.WaitForExit(2000))
@@ -935,7 +968,7 @@ public class GitVCS : AbstractVCSHelper
             },
             result =>
             {
-                Debug.Log("[REVERT] " + result);
+                Debug.Log("[VCS Discard] " + result);
             },
             error =>
             {
