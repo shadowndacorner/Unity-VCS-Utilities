@@ -1,12 +1,16 @@
 # Unity Version Control Utilities
-This is an editor utility which adds much nicer support for VCS in the Unity Editor.  I made it for usage in my own projects, but figured other people might find it useful.
+This is an editor plugin that adds much nicer support for version control systems to the Unity Editor.  I made it for my own projects, but figured other people might find it useful.
 
-Currently only git support is implemented, however there is an abstract interface to add support for whatever your preferred VCS is.  As for git, all functionality is run with the command line so it should theoretically support your preferred git host.  However, it has only been tested with GitHub.
+Currently only git support is implemented, but there is an abstract interface to add support for whatever your preferred VCS is.  As for git, all functionality is implemented using the command line so it should theoretically support your preferred git host.  However, it has only been tested with GitHub.
 
-Note that this project is not designed to be an all-in-one VCS client.  It is meant to be used in addition to an external VCS client.  This is explicitly meant to make the workflow of integrating with an external client easier for users who are less versed in how VCS works.  For example, I personally use Github Desktop and the git command line with this.
+*Note that this project is not designed to be an all-in-one VCS client.  It is meant to be used in addition to an external VCS client.  This is explicitly meant to make the workflow of integrating with an external client easier for users who are less versed in how VCS works.  For example, I personally use Github Desktop and the git command line with this.*
 
 # Features
-This utility is heavily inspired heavily by Unity Collaborate's integration with the Unity editor.  All of the following features are seamlessly integrated into the Unity editor, primarily in the Project panel.  It currently supports:
+![Project Window](http://shadowndacorner.com/wp-content/uploads/2018/02/ss-2018-02-25-at-04.50.10.jpg "Project Window with UVCSU, including modifications and locks")
+
+[Original blog post](https://shadowndacorner.com/2018/02/25/extending-unity-for-git-and-maybe-other-source-control/)
+
+This plugin is heavily inspired heavily by Unity Collaborate's integration with the Unity editor.  All of the following features are seamlessly integrated into the Unity editor, primarily in the Project panel.  It currently supports:
 * File Locking
 	* Shows the user that modified the file
 	* Option to prevent saving files modified by other users
