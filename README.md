@@ -38,8 +38,4 @@ The first time this is launched, it will ask you to set your git username in the
 After this initial step, all interactions can be done through either the right-click menu in the Project window or 
 
 ## Other VCS's
-Git is the only VCS currently implemented, but it should be fairly easy to implement other VCS's such as SVN or Perforce.  
-
-# Known Issues
-## Git
-The Git workflow currently assumes that the Git root directory is also the Unity project's root directory (ie, .git/ is next to Assets/).  This is one of the first things I aim to address.
+Git is the only VCS currently implemented, but it should be fairly easy to implement other VCS's such as SVN or Perforce.
