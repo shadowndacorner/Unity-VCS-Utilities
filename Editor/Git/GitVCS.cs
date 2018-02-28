@@ -188,10 +188,11 @@ public class GitVCS : AbstractVCSHelper
                             {
                                 vcs.GitUnlockFile(new string[] { v.Key });
                             }
-                            catch(System.Exception ex)
+                            catch (System.Exception ex)
                             {
                                 // Do nothing, it'll tell them
                             }
+                            break;
                         }
                     }
                     EditorGUILayout.EndHorizontal();
@@ -273,7 +274,7 @@ public class GitVCS : AbstractVCSHelper
         var storage = new LockFileStorage();
         storage.PID = Process.GetCurrentProcess().Id;
         var list = new List<LockedFile>();
-        foreach(var v in LockedFiles)
+        foreach (var v in LockedFiles)
         {
             list.Add(v.Value);
         }
@@ -281,13 +282,23 @@ public class GitVCS : AbstractVCSHelper
         VCSPrefs.SetString(LockedFileKey, JsonUtility.ToJson(storage));
     }
 
-    void LoadLockedFilesFromVCSPrefs(bool forceRebuild=false)
+    void LoadLockedFilesFromVCSPrefs(bool forceRebuild = false)
     {
+        if (_lockedFiles != null)
+        {
+            foreach (var v in _lockedFiles)
+            {
+                if (v.Value.FileLock != null)
+                {
+                    v.Value.FileLock.Close();
+                }
+            }
+        }
         _lockedFiles = new Dictionary<string, LockedFile>();
         if (VCSPrefs.HasKey(LockedFileKey))
         {
             var storage = JsonUtility.FromJson<LockFileStorage>(VCSPrefs.GetString(LockedFileKey));
-            
+
             // If this is a different run, let's refresh git locks
             if ((storage.PID != Process.GetCurrentProcess().Id) || forceRebuild)
             {
@@ -485,11 +496,11 @@ public class GitVCS : AbstractVCSHelper
                     }
                     Thread.Sleep(2000);
                 }
-                catch(ThreadAbortException ex)
+                catch (ThreadAbortException ex)
                 {
                     throw ex;
                 }
-                catch(System.Exception ex)
+                catch (System.Exception ex)
                 {
                     Debug.LogError("[VCS Async] " + ex);
                 }
@@ -498,7 +509,7 @@ public class GitVCS : AbstractVCSHelper
 
         m_asyncthread.Name = "Git Async Thread";
         m_asyncthread.Start();
-        
+
         // Preserves locked files for play mode, etc
         AssemblyReloadEvents.beforeAssemblyReload += () =>
         {
@@ -613,7 +624,7 @@ public class GitVCS : AbstractVCSHelper
                     branch = split[split.Length - 1].Trim();
                 }
             },
-            error=>
+            error =>
             {
                 Debug.LogError("[VCS Branch] " + error);
                 return true;
@@ -745,7 +756,7 @@ public class GitVCS : AbstractVCSHelper
         var path = ActiveTargetPath;
         if (File.Exists(path))
         {
-            return GitLockFile(new string[]{path});
+            return GitLockFile(new string[] { path });
         }
         return false;
     }
@@ -797,7 +808,7 @@ public class GitVCS : AbstractVCSHelper
 
     public override bool ContextMenuButtonEnabled(ContextMenuButton button)
     {
-        switch(button)
+        switch (button)
         {
             case ContextMenuButton.Lock:
                 return TargetPaths.Length == 1 && IsFileLockable(ActiveTargetPath) && !IsFileLocked(ActiveTargetPath);
@@ -984,7 +995,7 @@ public class GitVCS : AbstractVCSHelper
         var rPath = new List<string>();
         var tracked = new HashSet<string>(GetChangedFiles());
 
-        foreach(var v in paths)
+        foreach (var v in paths)
         {
             if (tracked.Contains(v))
             {
@@ -1007,7 +1018,7 @@ public class GitVCS : AbstractVCSHelper
         var cmdstring = new StringBuilder();
         foreach (var path in rPath)
         {
-            cmdstring.Append('"' + path + '"' );
+            cmdstring.Append('"' + path + '"');
         }
 
         GitHelper.RunGitCommand("checkout -- " + cmdstring.ToString(),
@@ -1069,7 +1080,7 @@ public class GitVCS : AbstractVCSHelper
             {
                 var parts = result.Split('\t');
                 var path = GitHelper.GitToUnityPath(parts[0]);
-                Debug.Log("Locking path " + path + "(from "+parts[0]+")");
+                Debug.Log("Locking path " + path + "(from " + parts[0] + ")");
                 var user = parts[1];
 
                 var locked = new LockedFile();
@@ -1203,7 +1214,7 @@ public class GitVCS : AbstractVCSHelper
                     if (nModPathHash == modPathHash)
                     {
                         ModifiedPaths.Clear();
-                        foreach(var v in list)
+                        foreach (var v in list)
                         {
                             ModifiedPaths.Add(v);
                         }
@@ -1211,7 +1222,7 @@ public class GitVCS : AbstractVCSHelper
                 });
             }
         }
-        catch(System.Exception ex)
+        catch (System.Exception ex)
         {
             // fail silently, okay here
         }
