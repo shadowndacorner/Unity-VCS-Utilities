@@ -290,10 +290,11 @@ public class GitVCS : AbstractVCSHelper
             {
                 if (v.Value.FileLock != null)
                 {
-                    v.Value.FileLock.Close();
+                    v.Value.FileLock.Dispose();
                 }
             }
         }
+
         _lockedFiles = new Dictionary<string, LockedFile>();
         if (VCSPrefs.HasKey(LockedFileKey))
         {
@@ -310,6 +311,17 @@ public class GitVCS : AbstractVCSHelper
                 foreach (var v in storage.Locks)
                 {
                     _lockedFiles.Add(v.Path, v);
+                    if (v.User != GitHelper.Username)
+                    {
+                        try
+                        {
+                            v.FileLock = new FileStream(v.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                        }
+                        catch (System.Exception ex)
+                        {
+                            Debug.LogError("Failed to create file lock for " + v.Path + ": " + ex);
+                        }
+                    }
                 }
             }
         }
@@ -471,8 +483,9 @@ public class GitVCS : AbstractVCSHelper
                                     foreach (var v in LockedFiles)
                                     {
                                         if (v.Value.FileLock != null)
-                                            v.Value.FileLock.Close();
+                                            v.Value.FileLock.Dispose();
                                     }
+
                                     LockedFiles.Clear();
                                     _lockedFiles = newLockFiles;
                                     foreach (var v in LockedFiles)
@@ -481,7 +494,7 @@ public class GitVCS : AbstractVCSHelper
                                         {
                                             try
                                             {
-                                                v.Value.FileLock = new FileStream(v.Key, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+                                                v.Value.FileLock = new FileStream(v.Value.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
                                             }
                                             catch (System.Exception ex)
                                             {
@@ -494,7 +507,7 @@ public class GitVCS : AbstractVCSHelper
                             UpdateLockedFiles();
                         });
                     }
-                    Thread.Sleep(2000);
+                    Thread.Sleep(10000);
                 }
                 catch (ThreadAbortException ex)
                 {
@@ -517,7 +530,7 @@ public class GitVCS : AbstractVCSHelper
             {
                 if (v.Value.FileLock != null)
                 {
-                    v.Value.FileLock.Close();
+                    v.Value.FileLock.Dispose();
                 }
             }
             m_asyncthread.Abort();
@@ -559,7 +572,7 @@ public class GitVCS : AbstractVCSHelper
                     GUI.Box(iconRect, VCSHelper.ModifiedItemIcon);
                 }
 
-                if (IsFileLocked(path))
+                if (IsFileLockedByLocalUser(path))
                 {
                     GUI.Box(iconRect, new GUIContent(VCSHelper.LocalLockIcon, "Locked by " + LockedFiles[path].User + " (local user)"));
                 }
@@ -1055,7 +1068,7 @@ public class GitVCS : AbstractVCSHelper
         {
             if (v.Value.FileLock != null)
             {
-                v.Value.FileLock.Close();
+                v.Value.FileLock.Dispose();
             }
         }
 
@@ -1093,11 +1106,12 @@ public class GitVCS : AbstractVCSHelper
                 var locked = new LockedFile();
                 locked.Path = path;
                 locked.User = user;
+                Debug.Log(user);
                 if (user != GitHelper.Username && GitHelper.PreventEditsOnRemoteLock)
                 {
                     try
                     {
-                        locked.FileLock = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+                        locked.FileLock = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
                     }
                     catch (System.Exception ex)
                     {
