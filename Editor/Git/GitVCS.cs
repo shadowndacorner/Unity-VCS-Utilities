@@ -513,6 +513,13 @@ public class GitVCS : AbstractVCSHelper
         // Preserves locked files for play mode, etc
         AssemblyReloadEvents.beforeAssemblyReload += () =>
         {
+            foreach(var v in LockedFiles)
+            {
+                if (v.Value.FileLock != null)
+                {
+                    v.Value.FileLock.Close();
+                }
+            }
             m_asyncthread.Abort();
             UpdateLockedFiles();
         };
