@@ -43,12 +43,35 @@ public static class VCSPrefs
     {
         get
         {
+            if (_thread == null)
+            {
+                // This is a dirty hack
+                bool isOnMainThread = false;
+                try
+                {
+                    EditorPrefs.HasKey("test"); // this will fail outside of the main thread
+                    isOnMainThread = true;
+                }
+                catch (System.Exception ex)
+                {
+
+                }
+                return isOnMainThread;
+            }
             return _thread == System.Threading.Thread.CurrentThread;
         }
     }
     static System.Threading.Thread _thread;
     static Dictionary<string, object> _values = new Dictionary<string, object>();
     static object _fileLock = new object();
+    public static bool HasInitializedKeys
+    {
+        get
+        {
+            return IsMainThread || _values.Count > 0;
+        }
+    }
+
     public static bool HasKey(string key)
     {
         lock (_fileLock)

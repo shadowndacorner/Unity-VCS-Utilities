@@ -616,19 +616,7 @@ public class GitVCS : AbstractVCSHelper
                 GUI.backgroundColor = oldBack;
             };
 
-        // This is a dirty hack
-        bool isOnMainThread = false;
-        try
-        {
-            EditorPrefs.HasKey("test"); // this will fail outside of the main thread
-            isOnMainThread = true;
-        }
-        catch(System.Exception ex)
-        {
-            
-        }
-
-        if (isOnMainThread && !GitHelper.Configured)
+        if (VCSPrefs.HasInitializedKeys && !GitHelper.Configured)
         {
             if (EditorUtility.DisplayDialog("Version Control", "You have not yet set up your GitHub username and you will not be able to lock files.  Would you like to open the configuration window?", "Yes", "No"))
             {
