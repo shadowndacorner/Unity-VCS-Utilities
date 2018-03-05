@@ -715,10 +715,6 @@ public class GitVCS : AbstractVCSHelper
                 {
                     changed.Add(unityPath);
                 }
-                else
-                {
-                    Debug.LogError("Ignoring file modifications @ " + result);
-                }
             },
             error =>
             {
