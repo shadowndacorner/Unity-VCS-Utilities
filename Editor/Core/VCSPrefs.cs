@@ -39,75 +39,164 @@ public static class VCSPrefs
         }
     }
 
+    public static bool IsMainThread
+    {
+        get
+        {
+            return _thread == System.Threading.Thread.CurrentThread;
+        }
+    }
+    static System.Threading.Thread _thread;
+    static Dictionary<string, object> _values = new Dictionary<string, object>();
+    static object _fileLock = new object();
     public static bool HasKey(string key)
     {
-        
-        return EditorPrefs.HasKey(ProjectKey + key);
+        lock (_fileLock)
+        {
+            if (!IsMainThread)
+            {
+                return _values.ContainsKey(key);
+            }
+
+            return EditorPrefs.HasKey(ProjectKey + key);
+        }
     }
 
     public static void SetString(string key, string value)
     {
-        EditorPrefs.SetString(ProjectKey + key, value);
+        lock (_fileLock)
+        {
+            EditorPrefs.SetString(ProjectKey + key, value);
+            _values[key] = value;
+            _thread = System.Threading.Thread.CurrentThread;
+        }
     }
 
     public static void SetBool(string key, bool value)
     {
-        EditorPrefs.SetBool(ProjectKey + key, value);
+        lock (_fileLock)
+        {
+            EditorPrefs.SetBool(ProjectKey + key, value);
+            _values[key] = value;
+            _thread = System.Threading.Thread.CurrentThread;
+        }
     }
 
     public static void SetInt(string key, int value)
     {
-        EditorPrefs.SetInt(ProjectKey + key, value);
+        lock (_fileLock)
+        {
+            EditorPrefs.SetInt(ProjectKey + key, value);
+            _values[key] = value;
+            _thread = System.Threading.Thread.CurrentThread;
+        }
     }
 
     public static void SetFloat(string key, int value)
     {
-        EditorPrefs.SetFloat(ProjectKey + key, value);
+        lock (_fileLock)
+        {
+            EditorPrefs.SetFloat(ProjectKey + key, value);
+            _values[key] = value;
+            _thread = System.Threading.Thread.CurrentThread;
+        }
     }
 
     public static string GetString(string key)
     {
-        return EditorPrefs.GetString(ProjectKey + key);
+        lock (_fileLock)
+        {
+            if (!IsMainThread)
+                return _values.ContainsKey(key) ? (string)_values[key] : null;
+
+            return EditorPrefs.GetString(ProjectKey + key);
+        }
     }
 
     public static string GetString(string key, string defaultValue)
     {
-        return EditorPrefs.GetString(ProjectKey + key, defaultValue);
+        lock (_fileLock)
+        {
+            if (!IsMainThread)
+                return _values.ContainsKey(key) ? (string)_values[key] : defaultValue;
+
+            return EditorPrefs.GetString(ProjectKey + key, defaultValue);
+        }
     }
 
     public static bool GetBool(string key)
     {
-        return EditorPrefs.GetBool(ProjectKey + key);
+        lock (_fileLock)
+        {
+            if (!IsMainThread)
+                return _values.ContainsKey(key) ? (bool)_values[key] : false;
+
+            return EditorPrefs.GetBool(ProjectKey + key);
+        }
     }
 
     public static bool GetBool(string key, bool defaultValue)
     {
-        return EditorPrefs.GetBool(ProjectKey + key, defaultValue);
+        lock (_fileLock)
+        {
+            if (!IsMainThread)
+                return _values.ContainsKey(key) ? (bool)_values[key] : defaultValue;
+
+            return EditorPrefs.GetBool(ProjectKey + key, defaultValue);
+        }
     }
 
     public static int GetInt(string key)
     {
-        return EditorPrefs.GetInt(ProjectKey + key);
+        lock (_fileLock)
+        {
+            if (!IsMainThread)
+                return _values.ContainsKey(key) ? (int)_values[key] : 0;
+
+            return EditorPrefs.GetInt(ProjectKey + key);
+        }
     }
 
     public static int GetInt(string key, int defaultValue)
     {
-        return EditorPrefs.GetInt(ProjectKey + key, defaultValue);
+        lock (_fileLock)
+        {
+            if (!IsMainThread)
+                return _values.ContainsKey(key) ? (int)_values[key] : defaultValue;
+
+            return EditorPrefs.GetInt(ProjectKey + key, defaultValue);
+        }
     }
 
     public static float GetFloat(string key)
     {
-        return EditorPrefs.GetFloat(ProjectKey + key);
+        lock (_fileLock)
+        {
+            if (!IsMainThread)
+                return _values.ContainsKey(key) ? (float)_values[key] : 0;
+
+            return EditorPrefs.GetFloat(ProjectKey + key);
+        }
     }
 
     public static float GetFloat(string key, float defaultValue)
     {
-        return EditorPrefs.GetFloat(ProjectKey + key, defaultValue);
+        lock (_fileLock)
+        {
+            if (!IsMainThread)
+                return _values.ContainsKey(key) ? (float)_values[key] : defaultValue;
+
+            return EditorPrefs.GetFloat(ProjectKey + key, defaultValue);
+        }
     }
 
     public static void DeleteKey(string key)
     {
-        EditorPrefs.DeleteKey(ProjectKey + key);
+        lock (_fileLock)
+        {
+            EditorPrefs.DeleteKey(ProjectKey + key);
+            _thread = System.Threading.Thread.CurrentThread;
+        }
     }
 
     // Unfortunately we can't filter DeleteAll.  Best not to use it.

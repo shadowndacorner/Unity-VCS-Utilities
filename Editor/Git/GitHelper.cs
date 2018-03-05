@@ -38,12 +38,16 @@ public static class GitHelper
         public const string UsernamePrefKey = "git-lfs-username";
         public const string SceneAutoLockKey = "git-lfs-autolock-scenes";
         public const string PreventEditsOnLockKey = "git-lfs-prevent-local-edits";
+        public const string LFSEnabledKey = "git-lfs-enabled";
+        public const string AutoUpdateSubmoduleKey = "git-lfs-auto-update-submodules";
 
         public static void ResetConfig()
         {
             VCSPrefs.DeleteKey(UsernamePrefKey);
             VCSPrefs.DeleteKey(PreventEditsOnLockKey);
             VCSPrefs.DeleteKey(SceneAutoLockKey);
+            VCSPrefs.DeleteKey(LFSEnabledKey);
+            VCSPrefs.DeleteKey(AutoUpdateSubmoduleKey);
         }
     }
 
@@ -60,10 +64,7 @@ public static class GitHelper
     {
         get
         {
-            if (!VCSPrefs.HasKey(VCSPrefsKeys.SceneAutoLockKey))
-                SceneAutoLock = true;
-
-            return VCSPrefs.GetBool(VCSPrefsKeys.SceneAutoLockKey);
+            return VCSPrefs.GetBool(VCSPrefsKeys.SceneAutoLockKey, true);
         }
         set
         {
@@ -76,14 +77,38 @@ public static class GitHelper
     {
         get
         {
-            if (!VCSPrefs.HasKey(VCSPrefsKeys.PreventEditsOnLockKey))
-                PreventEditsOnRemoteLock = true;
-            return VCSPrefs.GetBool(VCSPrefsKeys.PreventEditsOnLockKey);
+            return VCSPrefs.GetBool(VCSPrefsKeys.PreventEditsOnLockKey, true);
         }
         set
         {
             if (VCSPrefs.GetBool(VCSPrefsKeys.PreventEditsOnLockKey) != value)
                 VCSPrefs.SetBool(VCSPrefsKeys.PreventEditsOnLockKey, value);
+        }
+    }
+
+    public static bool LFSEnabled
+    {
+        get
+        {
+            return VCSPrefs.GetBool(VCSPrefsKeys.LFSEnabledKey, true);
+        }
+        set
+        {
+            if (VCSPrefs.GetBool(VCSPrefsKeys.LFSEnabledKey) != value)
+                VCSPrefs.SetBool(VCSPrefsKeys.LFSEnabledKey, value);
+        }
+    }
+
+    public static bool AutoUpdateSubmodules
+    {
+        get
+        {
+            return VCSPrefs.GetBool(VCSPrefsKeys.AutoUpdateSubmoduleKey, true);
+        }
+        set
+        {
+            if (VCSPrefs.GetBool(VCSPrefsKeys.AutoUpdateSubmoduleKey) != value)
+                VCSPrefs.SetBool(VCSPrefsKeys.AutoUpdateSubmoduleKey, value);
         }
     }
 

@@ -85,14 +85,27 @@ public class GitVCS : AbstractVCSHelper
                 }
 
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField("Automatically Lock Scenes on Save");
-                GitHelper.SceneAutoLock = EditorGUILayout.Toggle(GitHelper.SceneAutoLock, GUILayout.ExpandWidth(true));
+                EditorGUILayout.LabelField("Auto Update Submodules");
+                GitHelper.AutoUpdateSubmodules = EditorGUILayout.Toggle(GitHelper.AutoUpdateSubmodules, GUILayout.ExpandWidth(true));
                 EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField("Remote Lock Prevents Edits");
-                GitHelper.PreventEditsOnRemoteLock = EditorGUILayout.Toggle(GitHelper.PreventEditsOnRemoteLock, GUILayout.ExpandWidth(true));
+                EditorGUILayout.LabelField("LFS Enabled");
+                GitHelper.LFSEnabled = EditorGUILayout.Toggle(GitHelper.LFSEnabled, GUILayout.ExpandWidth(true));
                 EditorGUILayout.EndHorizontal();
+
+                if (GitHelper.LFSEnabled)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("Automatically Lock Scenes on Save");
+                    GitHelper.SceneAutoLock = EditorGUILayout.Toggle(GitHelper.SceneAutoLock, GUILayout.ExpandWidth(true));
+                    EditorGUILayout.EndHorizontal();
+
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("Remote Lock Prevents Edits");
+                    GitHelper.PreventEditsOnRemoteLock = EditorGUILayout.Toggle(GitHelper.PreventEditsOnRemoteLock, GUILayout.ExpandWidth(true));
+                    EditorGUILayout.EndHorizontal();
+                }
 
                 if (!hasCheckedVersion)
                 {
@@ -271,8 +284,14 @@ public class GitVCS : AbstractVCSHelper
 
     void UpdateLockedFiles()
     {
+        if (!GitHelper.LFSEnabled)
+        {
+            return;
+        }
+
         var storage = new LockFileStorage();
         storage.PID = Process.GetCurrentProcess().Id;
+
         var list = new List<LockedFile>();
         foreach (var v in LockedFiles)
         {
@@ -284,6 +303,9 @@ public class GitVCS : AbstractVCSHelper
 
     void LoadLockedFilesFromVCSPrefs(bool forceRebuild = false)
     {
+        if (!GitHelper.LFSEnabled)
+            return;
+
         if (_lockedFiles != null)
         {
             foreach (var v in _lockedFiles)
@@ -313,13 +335,16 @@ public class GitVCS : AbstractVCSHelper
                     _lockedFiles.Add(v.Path, v);
                     if (v.User != GitHelper.Username)
                     {
-                        try
+                        if (File.Exists(v.Path))
                         {
-                            v.FileLock = new FileStream(v.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                        }
-                        catch (System.Exception ex)
-                        {
-                            Debug.LogError("Failed to create file lock for " + v.Path + ": " + ex);
+                            try
+                            {
+                                v.FileLock = new FileStream(v.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                            }
+                            catch (System.Exception ex)
+                            {
+                                Debug.LogError("Failed to create file lock for " + v.Path + ": " + ex);
+                            }
                         }
                     }
                 }
@@ -420,92 +445,98 @@ public class GitVCS : AbstractVCSHelper
 
                     UpdateModifiedFilesAsync();
 
-                    // Update locks
                     var newLockFiles = new Dictionary<string, LockedFile>();
-                    GitHelper.RunGitCommand("lfs locks",
-                        proc =>
-                        {
-                            if (!proc.WaitForExit(5000))
+                    if (GitHelper.LFSEnabled)
+                    {
+                        // Update locks
+                        GitHelper.RunGitCommand("lfs locks",
+                            proc =>
                             {
+                                if (!proc.WaitForExit(5000))
+                                {
+                                    return true;
+                                }
+                                return false;
+                            },
+
+                            result =>
+                            {
+                                try
+                                {
+                                    var parts = result.Split('\t');
+                                    var path = GitHelper.GitToUnityPath(parts[0]);
+                                    var user = parts[1];
+
+                                    var locked = new LockedFile();
+                                    locked.Path = path;
+                                    locked.User = user;
+                                    newLockFiles.Add(path.Trim(), locked);
+                                }
+                                catch (System.Exception ex)
+                                {
+                                    Debug.LogError("[VCS Async] " + ex);
+                                }
+                            },
+
+                            error =>
+                            {
+                                Debug.LogError("[VCS]" + error);
                                 return true;
                             }
-                            return false;
-                        },
+                        );
 
-                        result =>
+                        lock (_actionQueueLock)
                         {
-                            try
+                            var cnt = LockedFiles.Count;
+                            string hashStr = "";
+                            foreach (var v in LockedFiles)
+                                hashStr += v.Key + ": " + v.Value.User.GetHashCode();
+
+                            int hash = hashStr.GetHashCode();
+                            _toRunOnMainThread.Enqueue(() =>
                             {
-                                var parts = result.Split('\t');
-                                var path = GitHelper.GitToUnityPath(parts[0]);
-                                var user = parts[1];
-
-                                var locked = new LockedFile();
-                                locked.Path = path;
-                                locked.User = user;
-                                newLockFiles.Add(path.Trim(), locked);
-                            }
-                            catch (System.Exception ex)
-                            {
-                                Debug.LogError("[VCS Async] " + ex);
-                            }
-                        },
-
-                        error =>
-                        {
-                            Debug.LogError("[VCS]" + error);
-                            return true;
-                        }
-                    );
-
-                    lock (_actionQueueLock)
-                    {
-                        var cnt = LockedFiles.Count;
-                        string hashStr = "";
-                        foreach (var v in LockedFiles)
-                            hashStr += v.Key + ": " + v.Value.User.GetHashCode();
-
-                        int hash = hashStr.GetHashCode();
-                        _toRunOnMainThread.Enqueue(() =>
-                        {
                             // Locked files
                             if (cnt == LockedFiles.Count)
-                            {
-                                var newHashStr = "";
-                                foreach (var v in LockedFiles)
-                                    newHashStr += v.Key + ": " + v.Value.User.GetHashCode();
+                                {
+                                    var newHashStr = "";
+                                    foreach (var v in LockedFiles)
+                                        newHashStr += v.Key + ": " + v.Value.User.GetHashCode();
 
-                                int newhash = newHashStr.GetHashCode();
+                                    int newhash = newHashStr.GetHashCode();
 
                                 // Let's make sure that the super lazy hashes match
                                 if (newhash == hash)
-                                {
-                                    foreach (var v in LockedFiles)
                                     {
-                                        if (v.Value.FileLock != null)
-                                            v.Value.FileLock.Dispose();
-                                    }
-
-                                    LockedFiles.Clear();
-                                    _lockedFiles = newLockFiles;
-                                    foreach (var v in LockedFiles)
-                                    {
-                                        if (v.Value.User != GitHelper.Username && GitHelper.PreventEditsOnRemoteLock)
+                                        foreach (var v in LockedFiles)
                                         {
-                                            try
+                                            if (v.Value.FileLock != null)
+                                                v.Value.FileLock.Dispose();
+                                        }
+
+                                        LockedFiles.Clear();
+                                        _lockedFiles = newLockFiles;
+                                        foreach (var v in LockedFiles)
+                                        {
+                                            if (v.Value.User != GitHelper.Username && GitHelper.PreventEditsOnRemoteLock)
                                             {
-                                                v.Value.FileLock = new FileStream(v.Value.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
-                                            }
-                                            catch (System.Exception ex)
-                                            {
-                                                Debug.LogError("Failed to create file lock for " + v.Key + ": " + ex);
+                                                if (File.Exists(v.Value.Path))
+                                                {
+                                                    try
+                                                    {
+                                                        v.Value.FileLock = new FileStream(v.Value.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                                                    }
+                                                    catch (System.Exception ex)
+                                                    {
+                                                        Debug.LogError("Failed to create file lock for " + v.Key + ": " + ex);
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            UpdateLockedFiles();
-                        });
+                                UpdateLockedFiles();
+                            });
+                        }
                     }
                     Thread.Sleep(10000);
                 }
@@ -585,7 +616,19 @@ public class GitVCS : AbstractVCSHelper
                 GUI.backgroundColor = oldBack;
             };
 
-        if (!GitHelper.Configured)
+        // This is a dirty hack
+        bool isOnMainThread = false;
+        try
+        {
+            EditorPrefs.HasKey("test"); // this will fail outside of the main thread
+            isOnMainThread = true;
+        }
+        catch(System.Exception ex)
+        {
+            
+        }
+
+        if (isOnMainThread && !GitHelper.Configured)
         {
             if (EditorUtility.DisplayDialog("Version Control", "You have not yet set up your GitHub username and you will not be able to lock files.  Would you like to open the configuration window?", "Yes", "No"))
             {
@@ -852,6 +895,9 @@ public class GitVCS : AbstractVCSHelper
     /// <returns></returns>
     public bool GitLockFile(string[] paths)
     {
+        if (!GitHelper.LFSEnabled)
+            return false;
+
         var cmdstring = new StringBuilder();
         foreach (var path in paths)
         {
@@ -935,6 +981,9 @@ public class GitVCS : AbstractVCSHelper
 
     public bool GitUnlockFile(string[] paths)
     {
+        if (!GitHelper.LFSEnabled)
+            return false;
+
         var cmdstring = new StringBuilder();
         foreach (var path in paths)
         {
@@ -1064,6 +1113,68 @@ public class GitVCS : AbstractVCSHelper
 
     public void RefreshGitLocks()
     {
+        if (GitHelper.AutoUpdateSubmodules)
+        {
+            try
+            {
+                var startinfo = new ProcessStartInfo();
+                startinfo.FileName = "git";
+                startinfo.RedirectStandardOutput = true;
+                startinfo.RedirectStandardError = true;
+                startinfo.UseShellExecute = false;
+                startinfo.CreateNoWindow = true;
+                startinfo.Arguments = "submodule update --init --recursive";
+
+                var proc = Process.Start(startinfo);
+                string line = "Downloading...";
+                while (!proc.HasExited)
+                {
+                    while (!proc.StandardError.EndOfStream && (line = proc.StandardError.ReadLine()) != null)
+                    {
+                        Debug.LogError(line);
+                    }
+
+                    while (!proc.StandardOutput.EndOfStream && (line = proc.StandardOutput.ReadLine()) != null)
+                    {
+                        Debug.Log(line);
+                    }
+
+                    EditorUtility.DisplayProgressBar("Downloading submodules...", line, 0);
+                    Thread.Sleep(30);
+                }
+                Debug.Log("Submodules completed");
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+            AssetDatabase.Refresh();
+        }
+
+        GitHelper.RunGitCommand("lfs",
+            proc=>
+            {
+                // If it doesn't work in 10 seconds there's something wrong
+                proc.WaitForExit(10000);
+                return false;
+            },
+            result =>
+            {
+
+            },
+            error =>
+            {
+                if (error.Contains("'lfs' is "))
+                {
+                    EditorUtility.DisplayDialog("Version Control", "Error: Git LFS is not installed.  File locking will not work.  Please install Git LFS.", "Okay");
+                    GitHelper.LFSEnabled = false;
+                }
+                return true;
+            });
+
+        if (!GitHelper.LFSEnabled)
+            return;
+
         foreach (var v in LockedFiles)
         {
             if (v.Value.FileLock != null)
@@ -1074,59 +1185,65 @@ public class GitVCS : AbstractVCSHelper
 
         LockedFiles.Clear();
 
-        GitHelper.RunGitCommand("lfs locks",
-            proc =>
-            {
-                try
-                {
-                    while (!proc.HasExited)
-                    {
-                        if (EditorUtility.DisplayCancelableProgressBar("Version Control", "Refreshing LFS locks...", 0))
-                        {
-                            proc.Kill();
-                            return true;
-                        }
-                        Thread.Sleep(16);
-                    }
-                }
-                finally
-                {
-                    EditorUtility.ClearProgressBar();
-                }
-                return false;
-            },
-
-            result =>
-            {
-                var parts = result.Split('\t');
-                var path = GitHelper.GitToUnityPath(parts[0]);
-                Debug.Log("Locking path " + path + "(from " + parts[0] + ")");
-                var user = parts[1];
-
-                var locked = new LockedFile();
-                locked.Path = path;
-                locked.User = user;
-                Debug.Log(user);
-                if (user != GitHelper.Username && GitHelper.PreventEditsOnRemoteLock)
+        if (GitHelper.LFSEnabled)
+        {
+            GitHelper.RunGitCommand("lfs locks",
+                proc =>
                 {
                     try
                     {
-                        locked.FileLock = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                        while (!proc.HasExited)
+                        {
+                            if (EditorUtility.DisplayCancelableProgressBar("Version Control", "Refreshing LFS locks...", 0))
+                            {
+                                proc.Kill();
+                                return true;
+                            }
+                            Thread.Sleep(16);
+                        }
                     }
-                    catch (System.Exception ex)
+                    finally
                     {
-                        Debug.LogError("Failed to create file lock for " + path + ": " + ex);
+                        EditorUtility.ClearProgressBar();
                     }
-                }
-                LockedFiles.Add(path.Trim(), locked);
-            },
+                    return false;
+                },
 
-            error =>
-            {
-                Debug.LogError(error);
-                return true;
-            }
-        );
+                result =>
+                {
+                    var parts = result.Split('\t');
+                    var path = GitHelper.GitToUnityPath(parts[0]);
+                    Debug.Log("Locking path " + path + "(from " + parts[0] + ")");
+                    var user = parts[1];
+
+                    var locked = new LockedFile();
+                    locked.Path = path;
+                    locked.User = user;
+
+                    if (user != GitHelper.Username && GitHelper.PreventEditsOnRemoteLock)
+                    {
+                        if (File.Exists(path))
+                        {
+                            try
+                            {
+                                locked.FileLock = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                            }
+                            catch (System.Exception ex)
+                            {
+                                Debug.LogError("Failed to create file lock for " + path + ": " + ex);
+                            }
+                        }
+                    }
+                    LockedFiles.Add(path.Trim(), locked);
+                },
+
+                error =>
+                {
+                    Debug.LogError(error);
+                    return true;
+                }
+            );
+        }
 
         UpdateLockedFiles();
         EditorApplication.RepaintProjectWindow();
