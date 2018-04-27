@@ -40,6 +40,7 @@ public static class GitHelper
         public const string PreventEditsOnLockKey = "git-lfs-prevent-local-edits";
         public const string LFSEnabledKey = "git-lfs-enabled";
         public const string AutoUpdateSubmoduleKey = "git-lfs-auto-update-submodules";
+        public const string EnableGitVCSKey = "git-vcs-enable";
 
         public static void ResetConfig()
         {
@@ -83,6 +84,19 @@ public static class GitHelper
         {
             if (VCSPrefs.GetBool(VCSPrefsKeys.PreventEditsOnLockKey) != value)
                 VCSPrefs.SetBool(VCSPrefsKeys.PreventEditsOnLockKey, value);
+        }
+    }
+
+    public static bool VCSEnabled
+    {
+        get
+        {
+            return VCSPrefs.GetBool(VCSPrefsKeys.EnableGitVCSKey, true);
+        }
+        set
+        {
+            if (VCSPrefs.GetBool(VCSPrefsKeys.EnableGitVCSKey) != value)
+                VCSPrefs.SetBool(VCSPrefsKeys.EnableGitVCSKey, value);
         }
     }
 

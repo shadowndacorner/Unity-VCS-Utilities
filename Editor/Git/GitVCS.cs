@@ -90,6 +90,11 @@ public class GitVCS : AbstractVCSHelper
                 EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("VCS Enabled");
+                GitHelper.VCSEnabled = EditorGUILayout.Toggle(GitHelper.VCSEnabled, GUILayout.ExpandWidth(true));
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField("LFS Enabled");
                 GitHelper.LFSEnabled = EditorGUILayout.Toggle(GitHelper.LFSEnabled, GUILayout.ExpandWidth(true));
                 EditorGUILayout.EndHorizontal();
@@ -425,6 +430,11 @@ public class GitVCS : AbstractVCSHelper
     bool inPlayMode = false;
     public override void Initialize()
     {
+        if (!GitHelper.VCSEnabled)
+        {
+            return;
+        }
+
         if (!FindGitRoot())
         {
             Debug.LogError("[VCS] Unable to find .git folder, git support disabled");
@@ -437,6 +447,11 @@ public class GitVCS : AbstractVCSHelper
             {
                 try
                 {
+                    if (!GitHelper.VCSEnabled)
+                    {
+                        break;
+                    }
+
                     if (inPlayMode)
                     {
                         Thread.Sleep(100);
@@ -636,21 +651,24 @@ public class GitVCS : AbstractVCSHelper
 
     public override void Update()
     {
-        inPlayMode = EditorApplication.isPlayingOrWillChangePlaymode;
-        if (_toRunOnMainThread.Count > 0)
+        if (GitHelper.VCSEnabled)
         {
-            lock (_actionQueueLock)
+            inPlayMode = EditorApplication.isPlayingOrWillChangePlaymode;
+            if (_toRunOnMainThread.Count > 0)
             {
-                // This should be minimal overhead, so we'll only run one per frame
-                if (_toRunOnMainThread.Count > 0)
+                lock (_actionQueueLock)
                 {
-                    try
+                    // This should be minimal overhead, so we'll only run one per frame
+                    if (_toRunOnMainThread.Count > 0)
                     {
-                        _toRunOnMainThread.Dequeue()();
-                    }
-                    catch (System.Exception ex)
-                    {
-                        Debug.LogError("[VCS Sync] " + ex);
+                        try
+                        {
+                            _toRunOnMainThread.Dequeue()();
+                        }
+                        catch (System.Exception ex)
+                        {
+                            Debug.LogError("[VCS Sync] " + ex);
+                        }
                     }
                 }
             }
