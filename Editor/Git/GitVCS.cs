@@ -706,6 +706,9 @@ public class GitVCS : AbstractVCSHelper
     {
         List<string> changed = new List<string>();
 
+        if (!GitHelper.VCSEnabled)
+            return changed;
+
         // TODO: Handle when git directory is not the project root
         GitHelper.RunGitCommand("diff --name-only",
             proc =>
@@ -738,6 +741,9 @@ public class GitVCS : AbstractVCSHelper
     public override List<string> GetTrackedFiles()
     {
         List<string> tracked = new List<string>();
+
+        if (!GitHelper.VCSEnabled)
+            return tracked;
 
         // TODO: Handle when git directory is not the project root
         GitHelper.RunGitCommand("ls-tree -r " + GetCurrentBranch() + " --name-only",
@@ -887,7 +893,8 @@ public class GitVCS : AbstractVCSHelper
 
     public override void HandleModifiedAsset()
     {
-        UpdateModifiedFilesAsync();
+        if (GitHelper.VCSEnabled)
+            UpdateModifiedFilesAsync();
     }
 
     /// <summary>
