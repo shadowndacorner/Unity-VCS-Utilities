@@ -31,28 +31,31 @@ public class VCS_AssetPostprocessor : AssetPostprocessor
 {
     static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
     {
-        foreach (string str in importedAssets)
+        if (VCSHelper.Instance != null)
         {
-            VCSHelper.AssetModified();
-            return;
-        }
+            foreach (string str in importedAssets)
+            {
+                VCSHelper.AssetModified();
+                return;
+            }
 
-        foreach (string str in deletedAssets)
-        {
-            VCSHelper.AssetModified();
-            return;
-        }
+            foreach (string str in deletedAssets)
+            {
+                VCSHelper.AssetModified();
+                return;
+            }
 
-        foreach (string str in movedAssets)
-        {
-            VCSHelper.AssetModified();
-            return;
-        }
+            foreach (string str in movedAssets)
+            {
+                VCSHelper.AssetModified();
+                return;
+            }
 
-        foreach (string str in movedFromAssetPaths)
-        {
-            VCSHelper.AssetModified();
-            return;
+            foreach (string str in movedFromAssetPaths)
+            {
+                VCSHelper.AssetModified();
+                return;
+            }
         }
     }
 }
